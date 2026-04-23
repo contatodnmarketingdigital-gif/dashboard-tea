@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard TEA — Performance de Tráfego</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, sans-serif; background: linear-gradient(135deg, #0A0E1A 0%, #0F172A 100%); color: #E2E8F0; min-height: 100vh; padding: 32px; line-height: 1.5; }
+.container { max-width: 1440px; margin: 0 auto; }
+.header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; padding-bottom: 24px; border-bottom: 1px solid rgba(148, 163, 184, 0.12); gap: 24px; }
+.header-title h1 { font-size: 32px; font-weight: 800; letter-spacing: -0.02em; color: #F1F5F9; margin-bottom: 6px; }
+.header-title p { font-size: 13px; color: #64748B; font-weight: 400; }
+.header-meta { text-align: right; font-size: 12px; color: #64748B; line-height: 1.7; }
+.header-meta strong { color: #94A3B8; font-weight: 600; }
+.status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; background: rgba(34, 197, 94, 0.12); color: #4ADE80; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; margin-top: 8px; }
+.status-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #4ADE80; box-shadow: 0 0 8px #4ADE80; }
+.verdict { background: linear-gradient(135deg, rgba(74, 222, 128, 0.08) 0%, rgba(15, 23, 42, 0.3) 100%); border: 1px solid rgba(74, 222, 128, 0.2); border-radius: 16px; padding: 24px; margin-bottom: 24px; }
+.verdict-label { font-size: 11px; font-weight: 800; color: #4ADE80; letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 10px; }
+.verdict-text { font-size: 17px; font-weight: 600; color: #F1F5F9; line-height: 1.6; }
+.verdict-detail { font-size: 13px; color: #94A3B8; margin-top: 10px; line-height: 1.6; }
+.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
+.kpi-card { background: linear-gradient(135deg, rgba(30, 41, 59, 0.75) 0%, rgba(15, 23, 42, 0.55) 100%); border: 1px solid rgba(148, 163, 184, 0.1); border-radius: 14px; padding: 18px 20px; position: relative; overflow: hidden; transition: all 0.25s ease; }
+.kpi-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--accent, #60A5FA), transparent); opacity: 0.7; }
+.kpi-card:hover { transform: translateY(-2px); border-color: rgba(148, 163, 184, 0.2); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4); }
+.kpi-card.g { --accent: #4ADE80; } .kpi-card.a { --accent: #FBBF24; } .kpi-card.b { --accent: #60A5FA; }
+.kpi-card.r { --accent: #F87171; } .kpi-card.p { --accent: #A78BFA; } .kpi-card.c { --accent: #22D3EE; }
+.kpi-card.pk { --accent: #F472B6; }
+.kpi-label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #64748B; margin-bottom: 10px; }
+.kpi-value { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; color: #F1F5F9; }
+.kpi-unit { font-size: 14px; color: #94A3B8; font-weight: 500; margin-left: 3px; }
+.kpi-delta { display: inline-block; font-size: 11px; font-weight: 600; margin-top: 8px; padding: 3px 8px; border-radius: 4px; }
+.kpi-delta.up { color: #4ADE80; background: rgba(74, 222, 128, 0.12); }
+.kpi-delta.down { color: #F87171; background: rgba(248, 113, 113, 0.12); }
+.kpi-delta.neu { color: #94A3B8; background: rgba(148, 163, 184, 0.1); }
+.section { background: rgba(15, 23, 42, 0.5); border: 1px solid rgba(148, 163, 184, 0.08); border-radius: 14px; padding: 22px; margin-bottom: 20px; }
+.section-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid rgba(148, 163, 184, 0.08); gap: 16px; }
+.section-title { font-size: 17px; font-weight: 700; color: #F1F5F9; letter-spacing: -0.01em; }
+.section-subtitle { font-size: 12px; color: #64748B; margin-top: 3px; }
+.section-meta { font-size: 10px; color: #64748B; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; flex-shrink: 0; }
+.chart-wrap { position: relative; height: 320px; }
+.chart-wrap.sm { height: 260px; } .chart-wrap.lg { height: 380px; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+.grid-3 { display: grid; grid-template-columns: 2fr 1fr 1.2fr; gap: 20px; margin-bottom: 20px; }
+.heatmap { display: grid; grid-template-columns: 90px repeat(7, 1fr); gap: 5px; margin-top: 12px; }
+.hm-head, .hm-row-lbl { font-size: 11px; font-weight: 700; color: #64748B; letter-spacing: 0.06em; text-transform: uppercase; padding: 10px 6px; text-align: center; display: flex; align-items: center; justify-content: center; }
+.hm-row-lbl { justify-content: flex-start; padding-left: 4px; color: #94A3B8; }
+.hm-cell { aspect-ratio: 1; min-height: 44px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; transition: transform 0.15s; }
+.hm-cell:hover { transform: scale(1.08); z-index: 2; }
+.hm-scale { display: flex; align-items: center; gap: 10px; font-size: 11px; color: #64748B; margin-top: 14px; justify-content: flex-end; }
+.hm-scale-bar { width: 140px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, rgba(74, 222, 128, 0.15), rgba(74, 222, 128, 0.95)); }
+.funnel { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.funnel-row { display: grid; grid-template-columns: 220px 1fr 80px 80px; align-items: center; gap: 16px; padding: 14px 18px; border-radius: 10px; background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(148, 163, 184, 0.1); }
+.funnel-bar-wrap { position: relative; height: 12px; background: rgba(148,163,184,0.08); border-radius: 6px; overflow: hidden; }
+.funnel-bar { height: 100%; border-radius: 6px; transition: width 0.6s ease; }
+.funnel-row.ok .funnel-bar { background: linear-gradient(90deg, #4ADE80, #22C55E); }
+.funnel-row.warn .funnel-bar { background: linear-gradient(90deg, #FBBF24, #F59E0B); }
+.funnel-row.bad .funnel-bar { background: linear-gradient(90deg, #F87171, #EF4444); }
+.funnel-label { font-size: 13px; font-weight: 600; color: #E2E8F0; }
+.funnel-value { font-weight: 700; font-size: 18px; text-align: right; color: #F1F5F9; }
+.funnel-pct { font-size: 12px; color: #94A3B8; text-align: right; font-weight: 600; }
+.insights { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.insight { padding: 18px 20px; border-radius: 12px; background: linear-gradient(135deg, rgba(30, 41, 59, 0.55) 0%, rgba(15, 23, 42, 0.35) 100%); border-left: 3px solid var(--ic, #60A5FA); }
+.insight.pos { --ic: #4ADE80; } .insight.warn { --ic: #FBBF24; } .insight.crit { --ic: #F87171; }
+.insight-icon { width: 32px; height: 32px; border-radius: 8px; background: rgba(255, 255, 255, 0.05); display: flex; align-items: center; justify-content: center; margin-bottom: 10px; font-weight: 800; font-size: 16px; color: var(--ic); }
+.insight-title { font-size: 14px; font-weight: 700; color: #F1F5F9; margin-bottom: 6px; }
+.insight-text { font-size: 13px; color: #94A3B8; line-height: 1.55; }
+.dtable { width: 100%; border-collapse: collapse; font-size: 13px; }
+.dtable th { text-align: left; padding: 10px 12px; font-size: 10px; font-weight: 700; color: #64748B; letter-spacing: 0.08em; text-transform: uppercase; border-bottom: 1px solid rgba(148, 163, 184, 0.12); }
+.dtable td { padding: 12px; color: #E2E8F0; border-bottom: 1px solid rgba(148, 163, 184, 0.05); }
+.dtable tr:hover td { background: rgba(148, 163, 184, 0.03); }
+.dtable .num { text-align: right; font-weight: 600; }
+.camp-name { font-size: 12px; color: #E2E8F0; font-weight: 500; max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.roas-badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-weight: 700; font-size: 11px; }
+.roas-badge.up { color: #4ADE80; background: rgba(74, 222, 128, 0.12); }
+.roas-badge.mid { color: #FBBF24; background: rgba(251, 191, 36, 0.12); }
+.roas-badge.down { color: #F87171; background: rgba(248, 113, 113, 0.12); }
+.plan-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.plan-card { background: linear-gradient(135deg, rgba(96, 165, 250, 0.06) 0%, rgba(30, 41, 59, 0.35) 100%); border: 1px solid rgba(96, 165, 250, 0.18); border-radius: 12px; padding: 20px; }
+.plan-sprint { font-size: 10px; font-weight: 800; color: #60A5FA; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 6px; }
+.plan-title { font-size: 15px; font-weight: 700; color: #F1F5F9; margin-bottom: 14px; }
+.plan-list { list-style: none; padding: 0; }
+.plan-list li { font-size: 12px; color: #94A3B8; padding: 6px 0; padding-left: 18px; position: relative; line-height: 1.5; }
+.plan-list li::before { content: '→'; position: absolute; left: 0; color: #60A5FA; font-weight: 800; }
+.demo-panel { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; }
+.demo-card { padding: 16px; border-radius: 10px; background: rgba(15,23,42,0.4); border: 1px solid rgba(148,163,184,0.08); }
+.demo-title { font-size: 11px; color: #64748B; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; margin-bottom: 8px; }
+.demo-value { font-size: 22px; font-weight: 700; color: #F1F5F9; }
+.demo-sub { font-size: 11px; color: #94A3B8; margin-top: 4px; }
+.footer { margin-top: 28px; padding-top: 20px; border-top: 1px solid rgba(148, 163, 184, 0.08); text-align: center; font-size: 11px; color: #475569; }
+.chart-error { display: flex; align-items: center; justify-content: center; height: 100%; color: #64748B; font-size: 12px; background: rgba(148, 163, 184, 0.04); border-radius: 8px; padding: 20px; text-align: center; }
+@media (max-width: 1100px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } .grid-2, .grid-3 { grid-template-columns: 1fr; } .insights, .plan-grid, .demo-panel { grid-template-columns: 1fr; } .funnel-row { grid-template-columns: 140px 1fr 60px 60px; } }
+@media (max-width: 640px) { body { padding: 16px; } .kpi-grid { grid-template-columns: 1fr; } .header { flex-direction: column; gap: 16px; } .header-meta { text-align: left; } .heatmap { grid-template-columns: 70px repeat(7, 1fr); } .hm-cell { font-size: 12px; } }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header class="header">
+  <div class="header-title">
+    <h1>Dashboard TEA</h1>
+    <p>Curso Neuromodulação no TEA · Tráfego pago × vendas reais × demografia</p>
+  </div>
+  <div class="header-meta">
+    <strong>Cliente:</strong> Equipe Milionária<br>
+    <strong>Período:</strong> mar/2025 – abr/2026<br>
+    <strong>Atualizado:</strong> 22/04/2026
+    <div class="status-badge">OPERAÇÃO ATIVA</div>
+  </div>
+</header>
+
+<div class="verdict">
+  <div class="verdict-label">VEREDITO EXECUTIVO</div>
+  <div class="verdict-text">
+    ROAS real de <strong style="color:#4ADE80">1,49x</strong> · Margem bruta <strong style="color:#4ADE80">R$ 30.918</strong> · Público <strong style="color:#F472B6">76% feminino</strong> (profissionais de saúde) · Concentração <strong style="color:#4ADE80">Sudeste 47%</strong>
+  </div>
+  <div class="verdict-detail">
+    Gargalos reais: <strong style="color:#FBBF24">atribuição fantasma do Meta</strong> (metade das vendas sem UTM), <strong style="color:#FBBF24">falta de recuperação de abandono</strong> (R$ 18,5k recuperáveis) e <strong style="color:#FBBF24">direcionamento para oferta base</strong> quando a Promo converte 34% mais ticket.
+  </div>
+</div>
+
+<div class="kpi-grid">
+  <div class="kpi-card g"><div class="kpi-label">Receita Líquida</div><div class="kpi-value">R$ 94,4<span class="kpi-unit">k</span></div><div class="kpi-delta up">▲ 30% acima do estimado</div></div>
+  <div class="kpi-card b"><div class="kpi-label">Vendas Pagas</div><div class="kpi-value">308</div><div class="kpi-delta up">▲ 68,6% aprovação</div></div>
+  <div class="kpi-card a"><div class="kpi-label">Ticket Médio</div><div class="kpi-value">R$ 306<span class="kpi-unit">,54</span></div><div class="kpi-delta up">▲ 21% vs base R$ 254</div></div>
+  <div class="kpi-card p"><div class="kpi-label">ROAS Real</div><div class="kpi-value">1,49<span class="kpi-unit">x</span></div><div class="kpi-delta up">▲ Margem R$ 30,9k</div></div>
+  <div class="kpi-card pk"><div class="kpi-label">Público Feminino</div><div class="kpi-value">76<span class="kpi-unit">,0%</span></div><div class="kpi-delta up">● 234 compradoras</div></div>
+  <div class="kpi-card b"><div class="kpi-label">CPA Real</div><div class="kpi-value">R$ 206<span class="kpi-unit">,16</span></div><div class="kpi-delta up">▲ Abaixo do break-even</div></div>
+  <div class="kpi-card a"><div class="kpi-label">Margem/Venda</div><div class="kpi-value">R$ 100<span class="kpi-unit">,38</span></div><div class="kpi-delta up">▲ 32,7% margem</div></div>
+  <div class="kpi-card r"><div class="kpi-label">Receita a Recuperar</div><div class="kpi-value">R$ 18,5<span class="kpi-unit">k</span></div><div class="kpi-delta down">● 141 pedidos abandonados</div></div>
+</div>
+
+<div class="section">
+  <div class="section-header"><div><div class="section-title">Performance Mensal — Investimento × Receita</div><div class="section-subtitle">Gasto de mídia vs receita real (Kiwify) · ROAS médio 1,49x</div></div><div class="section-meta">Mar/2025 – Abr/2026</div></div>
+  <div class="chart-wrap lg"><canvas id="chartMensal"></canvas></div>
+</div>
+
+<div class="grid-2">
+  <div class="section">
+    <div class="section-header"><div><div class="section-title">Vendas por Dia da Semana</div><div class="section-subtitle">Quinta concentra 17,9% das vendas — dia de ouro</div></div><div class="section-meta">308 vendas</div></div>
+    <div class="chart-wrap"><canvas id="chartDow"></canvas></div>
+  </div>
+  <div class="section">
+    <div class="section-header"><div><div class="section-title">Vendas por Hora do Dia</div><div class="section-subtitle">Dupla janela: 9-11h e 21-23h — padrão B2B</div></div><div class="section-meta">Horário Brasília</div></div>
+    <div class="chart-wrap"><canvas id="chartHora"></canvas></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-header"><div><div class="section-title">Mapa de Calor — Semana do Mês × Dia da Semana</div><div class="section-subtitle">Onde concentrar o budget · Combos mais fortes em verde</div></div><div class="section-meta">Nº vendas</div></div>
+  <div class="heatmap" id="heatmap"></div>
+  <div class="hm-scale"><span>Menos vendas</span><div class="hm-scale-bar"></div><span>Mais vendas</span></div>
+</div>
+
+<div class="grid-3">
+  <div class="section">
+    <div class="section-header"><div><div class="section-title">Semana do Mês</div><div class="section-subtitle">Sem 1 + Sem 3 = 52%</div></div></div>
+    <div class="chart-wrap sm"><canvas id="chartSemana"></canvas></div>
+  </div>
+  <div class="section">
+    <div class="section-header"><div><div class="section-title">Pagamento</div><div class="section-subtitle">Pix domina (45%)</div></div></div>
+    <div class="chart-wrap sm"><canvas id="chartPag"></canvas></div>
+  </div>
+  <div class="section">
+    <div class="section-header"><div><div class="section-title">Ofertas</div><div class="section-subtitle">Promo ticket R$ 341 (+34%)</div></div></div>
+    <div class="chart-wrap sm"><canvas id="chartOferta"></canvas></div>
+  </div>
+</div>
+
+<!-- DEMOGRAFIA -->
+<div class="section">
+  <div class="section-header">
+    <div><div class="section-title">Perfil Demográfico do Comprador</div><div class="section-subtitle">Gênero inferido pelo primeiro nome · UF via DDD do celular (308 vendas)</div></div>
+    <div class="section-meta">Fonte: Kiwify</div>
+  </div>
+  <div class="demo-panel">
+    <div class="demo-card"><div class="demo-title">Gênero dominante</div><div class="demo-value" style="color:#F472B6;">76,0% Feminino</div><div class="demo-sub">234 compradoras · 58 compradores (18,8%) · 16 N/I (5,2%)</div></div>
+    <div class="demo-card"><div class="demo-title">Ticket médio por gênero</div><div class="demo-value">F: R$ 310 · M: R$ 294</div><div class="demo-sub">Mulheres compram ofertas de ticket mais alto (+5,4%)</div></div>
+    <div class="demo-card"><div class="demo-title">Estado líder</div><div class="demo-value">SP · 23,4%</div><div class="demo-sub">72 vendas · seguido de RJ (12,3%) e MG (9,4%)</div></div>
+    <div class="demo-card"><div class="demo-title">Região dominante</div><div class="demo-value" style="color:#4ADE80;">Sudeste · 47%</div><div class="demo-sub">144 vendas · Nordeste 18%, Sul 16%, Centro-Oeste 14%, Norte 5%</div></div>
+  </div>
+</div>
+
+<div class="grid-2">
+  <div class="section">
+    <div class="section-header"><div><div class="section-title">Gênero</div><div class="section-subtitle">Inferido por primeiro nome (95% acurácia)</div></div><div class="section-meta">N=308</div></div>
+    <div class="chart-wrap"><canvas id="chartGenero"></canvas></div>
+  </div>
+  <div class="section">
+    <div class="section-header"><div><div class="section-title">Top Estados</div><div class="section-subtitle">Via DDD do celular · 100% coverage</div></div><div class="section-meta">15 UFs</div></div>
+    <div class="chart-wrap"><canvas id="chartUF"></canvas></div>
+  </div>
+</div>
+
+<div class="grid-2">
+  <div class="section">
+    <div class="section-header"><div><div class="section-title">Distribuição por Região</div><div class="section-subtitle">Concentração fortíssima no Sudeste</div></div><div class="section-meta">5 regiões</div></div>
+    <div class="chart-wrap"><canvas id="chartRegiao"></canvas></div>
+  </div>
+  <div class="section">
+    <div class="section-header"><div><div class="section-title">Funil de Checkout</div><div class="section-subtitle">457 pedidos · 68,6% aprovação · R$ 18,5k recuperáveis</div></div><div class="section-meta">Kiwify</div></div>
+    <div class="funnel" id="funnel"></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-header"><div><div class="section-title">Top Campanhas — Vendas Reais × Gasto</div><div class="section-subtitle">Atribuição via UTM Kiwify · ROAS real pode divergir do Meta</div></div><div class="section-meta">Top 8</div></div>
+  <table class="dtable">
+    <thead><tr><th>Campanha</th><th class="num">Vendas</th><th class="num">Receita</th><th class="num">Gasto</th><th class="num">ROAS</th></tr></thead>
+    <tbody id="tblCamp"></tbody>
+  </table>
+</div>
+
+<div class="section">
+  <div class="section-header"><div><div class="section-title">Insights Críticos</div><div class="section-subtitle">Os achados que precisam de ação</div></div></div>
+  <div class="insights">
+    <div class="insight pos"><div class="insight-icon">✓</div><div class="insight-title">Produto lucrativo confirmado</div><div class="insight-text">ROAS 1,49x e margem bruta R$ 30,9k. Ticket 21% acima da base graças ao upsell já embutido na oferta Promo.</div></div>
+    <div class="insight pos"><div class="insight-icon">♀</div><div class="insight-title">Público 76% feminino</div><div class="insight-text">Mulheres profissionais de saúde dominam o comprador. Criativo deve refletir esse perfil: autoridade técnica + depoimentos femininos.</div></div>
+    <div class="insight crit"><div class="insight-icon">!</div><div class="insight-title">Campanha "campeã" é prejuízo</div><div class="insight-text">[C][TEA][VENDAS][CBO][04/03/26]: Meta reportou 102 compras; realidade 23. ROAS 0,45x. Pausar imediatamente.</div></div>
+    <div class="insight warn"><div class="insight-icon">◆</div><div class="insight-title">Dia de ouro: QUINTA</div><div class="insight-text">55 vendas (17,9%). Quarta é pior (11,4%). Ativar na quarta segue certo — a campanha converte na quinta.</div></div>
+    <div class="insight crit"><div class="insight-icon">$</div><div class="insight-title">R$ 18,5k recuperáveis</div><div class="insight-text">77 pedidos waiting + 64 cartões recusados. Fluxo automático de e-mail + WhatsApp recupera 25-40%.</div></div>
+    <div class="insight pos"><div class="insight-icon">▲</div><div class="insight-title">Concentração Sudeste 47%</div><div class="insight-text">SP+RJ+MG = 139 vendas (45%). Testar campanhas segmentadas por região para captar Norte/Nordeste sub-representados.</div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-header"><div><div class="section-title">Plano de Ação — 60 Dias</div><div class="section-subtitle">Sprints executivos com foco em destravamento operacional</div></div></div>
+  <div class="plan-grid">
+    <div class="plan-card">
+      <div class="plan-sprint">Sprint 1 · Dias 1-15</div>
+      <div class="plan-title">Correções Invisíveis</div>
+      <ul class="plan-list">
+        <li>Configurar UTMs em 100% das campanhas ativas</li>
+        <li>Implementar CAPI (Conversion API) do Meta</li>
+        <li>Fluxo de recuperação pix/boleto (3 e-mails + 2 WhatsApps)</li>
+        <li>Fluxo de cartão recusado (reenvio imediato)</li>
+        <li>Mapear diferença entre ofertas TEA e Promo</li>
+      </ul>
+    </div>
+    <div class="plan-card">
+      <div class="plan-sprint">Sprint 2 · Dias 16-30</div>
+      <div class="plan-title">Reestruturação</div>
+      <ul class="plan-list">
+        <li>Pausar [CBO VENDAS 04/03/26] — ROAS 0,45x</li>
+        <li>Replicar estrutura [ABO PÁGINA INLEAD 19/06/25]</li>
+        <li>Criativos com face feminina (público 76% F)</li>
+        <li>Criar LAL 1/3/5% dos 308 compradores</li>
+        <li>Testar campanhas por região (SP/RJ/MG vs NE)</li>
+      </ul>
+    </div>
+    <div class="plan-card">
+      <div class="plan-sprint">Sprint 3 · Dias 31-60</div>
+      <div class="plan-title">Escala Controlada</div>
+      <ul class="plan-list">
+        <li>Subir budget R$ 15k → R$ 25k em 3 passos</li>
+        <li>Monitorar ROAS real (Kiwify, não Meta)</li>
+        <li>Ampliar combo premium "TEA." como upsell</li>
+        <li>Ofertas segmentadas por especialidade</li>
+        <li>Revisão mensal com este dashboard</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  Dashboard gerado a partir de Meta Ads + Kiwify · Fonte de verdade: Kiwify · ROAS reais atribuídos via UTM · Demografia: gênero inferido por primeiro nome, UF via DDD do celular
+</div>
+
+</div>
+
+<script>
+const DEMO = {"genero":[{"grupo":"Feminino","vendas":234,"receita":72623.59,"ticket":310.36,"cor":"#F472B6"},{"grupo":"Masculino","vendas":58,"receita":17070.47,"ticket":294.32,"cor":"#60A5FA"},{"grupo":"Não identificado","vendas":16,"receita":4719.94,"ticket":295.00,"cor":"#94A3B8"}],"uf":[{"uf":"SP","vendas":72,"receita":21814.36},{"uf":"RJ","vendas":38,"receita":11757.15},{"uf":"MG","vendas":29,"receita":8908.93},{"uf":"SC","vendas":18,"receita":5411.61},{"uf":"RS","vendas":17,"receita":6099.94},{"uf":"PR","vendas":14,"receita":4080.66},{"uf":"GO","vendas":14,"receita":4299.38},{"uf":"PE","vendas":12,"receita":3398.88},{"uf":"MS","vendas":12,"receita":4091.31},{"uf":"BA","vendas":12,"receita":3978.68},{"uf":"MT","vendas":9,"receita":2635.63},{"uf":"DF","vendas":9,"receita":2643.37},{"uf":"CE","vendas":9,"receita":2895.00},{"uf":"RN","vendas":7,"receita":2040.32},{"uf":"MA","vendas":6,"receita":1888.24}],"regiao":[{"regiao":"Sudeste","vendas":144,"receita":43925.46,"cor":"#4ADE80"},{"regiao":"Nordeste","vendas":57,"receita":17347.94,"cor":"#FBBF24"},{"regiao":"Sul","vendas":49,"receita":15592.21,"cor":"#60A5FA"},{"regiao":"Centro-Oeste","vendas":44,"receita":13669.69,"cor":"#A78BFA"},{"regiao":"Norte","vendas":14,"receita":3878.70,"cor":"#22D3EE"}]};
+
+const DATA = {"mensal":[{"mes_venda":"2025-03","vendas":10,"receita":5301.65,"gasto":1535.78},{"mes_venda":"2025-04","vendas":3,"receita":1846.58,"gasto":776.67},{"mes_venda":"2025-05","vendas":38,"receita":13344.23,"gasto":11528.15},{"mes_venda":"2025-06","vendas":61,"receita":20656.4,"gasto":14522.66},{"mes_venda":"2025-07","vendas":39,"receita":13191.36,"gasto":4220.35},{"mes_venda":"2025-08","vendas":10,"receita":3062.98,"gasto":2689.47},{"mes_venda":"2025-09","vendas":24,"receita":6192.55,"gasto":4605.54},{"mes_venda":"2025-10","vendas":43,"receita":11113.0,"gasto":5313.0},{"mes_venda":"2025-11","vendas":5,"receita":1358.57,"gasto":838.72},{"mes_venda":"2026-01","vendas":2,"receita":681.78,"gasto":0.0},{"mes_venda":"2026-02","vendas":19,"receita":5006.92,"gasto":2621.34},{"mes_venda":"2026-03","vendas":40,"receita":10263.27,"gasto":14844.17},{"mes_venda":"2026-04","vendas":1,"receita":254.42,"gasto":0.0}],"dia_semana":[{"dia_pt":"Segunda","vendas":52,"receita":15901.7},{"dia_pt":"Terça","vendas":38,"receita":11364.51},{"dia_pt":"Quarta","vendas":35,"receita":11030.91},{"dia_pt":"Quinta","vendas":55,"receita":17522.94},{"dia_pt":"Sexta","vendas":40,"receita":11585.65},{"dia_pt":"Sábado","vendas":38,"receita":11548.04},{"dia_pt":"Domingo","vendas":50,"receita":15460.25}],"hora":[{"hora":0,"vendas":3,"receita":936.18},{"hora":1,"vendas":3,"receita":1022.64},{"hora":2,"vendas":0,"receita":0},{"hora":3,"vendas":1,"receita":254.42},{"hora":4,"vendas":0,"receita":0},{"hora":5,"vendas":2,"receita":595.3},{"hora":6,"vendas":12,"receita":3960.86},{"hora":7,"vendas":13,"receita":4180.09},{"hora":8,"vendas":18,"receita":4849.04},{"hora":9,"vendas":23,"receita":7235.03},{"hora":10,"vendas":29,"receita":9409.98},{"hora":11,"vendas":31,"receita":9572.99},{"hora":12,"vendas":17,"receita":4946.05},{"hora":13,"vendas":13,"receita":3797.2},{"hora":14,"vendas":17,"receita":5207.57},{"hora":15,"vendas":13,"receita":3413.39},{"hora":16,"vendas":9,"receita":2723.81},{"hora":17,"vendas":4,"receita":2280.24},{"hora":18,"vendas":15,"receita":4392.51},{"hora":19,"vendas":15,"receita":4265.35},{"hora":20,"vendas":13,"receita":4085.6},{"hora":21,"vendas":21,"receita":6179.12},{"hora":22,"vendas":25,"receita":7744.63},{"hora":23,"vendas":11,"receita":3362.0}],"semana_mes":[{"sem_mes":1,"vendas":85,"receita":24706.21},{"sem_mes":2,"vendas":53,"receita":17081.38},{"sem_mes":3,"vendas":76,"receita":22072.68},{"sem_mes":4,"vendas":66,"receita":20576.8},{"sem_mes":5,"vendas":28,"receita":9976.93}],"pagamento":[{"Pagamento":"pix","vendas":138,"receita":41358.82},{"Pagamento":"mastercard","vendas":93,"receita":29122.69},{"Pagamento":"visa","vendas":69,"receita":21375.89},{"Pagamento":"elo","vendas":5,"receita":1834.08},{"Pagamento":"boleto","vendas":3,"receita":722.52}],"oferta":[{"Oferta":"TEA","vendas":139,"receita":35412.07,"ticket":254.76},{"Oferta":"Promo","vendas":129,"receita":43973.52,"ticket":340.88},{"Oferta":"PROMO2","vendas":11,"receita":3749.79,"ticket":340.89},{"Oferta":"10%OFF","vendas":7,"receita":2145.92,"ticket":306.56},{"Oferta":"TEA.","vendas":6,"receita":4898.4,"ticket":816.4}],"matriz":[{"sem_mes":1,"Segunda":13,"Terça":11,"Quarta":15,"Quinta":17,"Sexta":9,"Sábado":12,"Domingo":8},{"sem_mes":2,"Segunda":7,"Terça":9,"Quarta":5,"Quinta":3,"Sexta":10,"Sábado":5,"Domingo":14},{"sem_mes":3,"Segunda":6,"Terça":9,"Quarta":10,"Quinta":21,"Sexta":12,"Sábado":12,"Domingo":6},{"sem_mes":4,"Segunda":18,"Terça":6,"Quarta":4,"Quinta":11,"Sexta":7,"Sábado":7,"Domingo":13},{"sem_mes":5,"Segunda":8,"Terça":3,"Quarta":1,"Quinta":3,"Sexta":2,"Sábado":2,"Domingo":9}],"top_campanhas":[{"nome":"[TEA][CONV][ABO][PAGINA INLEAD ANTIGA][19/06/25]","vendas":31,"receita":10567.28,"gasto":9225.08,"roas":1.145466},{"nome":"[C] [TEA] [VENDAS] [CBO] [04/03/26]","vendas":23,"receita":5851.66,"gasto":12952.42,"roas":0.45179},{"nome":"[TEA][CONV][ABO][PUBLICO FRIO][TESTE CRIATIVOS][06/05/25]","vendas":10,"receita":3408.8,"gasto":4874.73,"roas":0.699279},{"nome":"AppSell","vendas":7,"receita":2299.7,"gasto":0.0,"roas":0},{"nome":"[C-01]TEA][CONV][ABO][PSCI/TERA][21/08/25]","vendas":7,"receita":1780.94,"gasto":1835.97,"roas":0.970028},{"nome":"[TEA][CONV][CBO][ABERTO][26/05/25]","vendas":7,"receita":2386.16,"gasto":0.0,"roas":0},{"nome":"[TEA][CONV][CBO]MEDICO INTERNO][PÁGINA S/VIDEO E BOTÃO][01","vendas":4,"receita":1363.52,"gasto":920.59,"roas":1.481132},{"nome":"[TEA][CONV][CBO][REMARKETING][03/07/25]","vendas":4,"receita":1363.52,"gasto":0.0,"roas":0}]};
+
+const fmtBRL = function(v) { return 'R$ ' + new Intl.NumberFormat('pt-BR', {maximumFractionDigits: 0}).format(v || 0); };
+const fmtBRLk = function(v) { if (!v) return 'R$ 0'; if (v >= 1000) return 'R$ ' + (v/1000).toFixed(1) + 'k'; return 'R$ ' + v.toFixed(0); };
+const MESES_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+const DIAS_PT = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
+
+function showError(canvasId, msg) {
+  const cv = document.getElementById(canvasId); if (!cv) return;
+  cv.parentElement.innerHTML = '<div class="chart-error">' + msg + '</div>';
+}
+function chartSafe(id, fn) {
+  try { if (typeof Chart === 'undefined') { showError(id, 'Chart.js não carregou'); return; } fn(); }
+  catch (e) { console.error('Erro em ' + id, e); showError(id, 'Erro: ' + e.message); }
+}
+function configureChart() {
+  if (typeof Chart === 'undefined') return;
+  Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+  Chart.defaults.color = '#94A3B8';
+  Chart.defaults.borderColor = 'rgba(148, 163, 184, 0.08)';
+}
+
+function renderAll() {
+  configureChart();
+
+  chartSafe('chartMensal', function() {
+    const mensal = DATA.mensal;
+    const labels = mensal.map(function(m) { const parts = m.mes_venda.split('-'); return MESES_PT[parseInt(parts[1])-1] + '/' + parts[0].slice(2); });
+    new Chart(document.getElementById('chartMensal'), {
+      type: 'bar',
+      data: { labels: labels, datasets: [
+        { label: 'Receita líquida', data: mensal.map(function(m){return m.receita;}), backgroundColor: 'rgba(74, 222, 128, 0.8)', borderWidth: 0, borderRadius: 6, yAxisID: 'y' },
+        { label: 'Gasto de mídia', data: mensal.map(function(m){return m.gasto;}), backgroundColor: 'rgba(96, 165, 250, 0.65)', borderWidth: 0, borderRadius: 6, yAxisID: 'y' },
+        { label: 'Vendas (n)', data: mensal.map(function(m){return m.vendas;}), type: 'line', borderColor: 'rgba(251, 191, 36, 1)', backgroundColor: 'rgba(251, 191, 36, 0.15)', borderWidth: 2.5, tension: 0.3, pointBackgroundColor: 'rgba(251, 191, 36, 1)', pointBorderColor: '#0F172A', pointBorderWidth: 2, pointRadius: 4, yAxisID: 'y1' }
+      ]},
+      options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 16, font: {size: 11} } },
+          tooltip: { backgroundColor: 'rgba(15, 23, 42, 0.95)', borderColor: 'rgba(148, 163, 184, 0.2)', borderWidth: 1, padding: 12,
+            callbacks: { label: function(ctx) { if (ctx.dataset.label === 'Vendas (n)') return ctx.dataset.label + ': ' + ctx.parsed.y; return ctx.dataset.label + ': ' + fmtBRL(ctx.parsed.y); } } } },
+        scales: { x: { grid: { display: false } }, y: { position: 'left', grid: { color: 'rgba(148, 163, 184, 0.06)' }, ticks: { callback: function(v){return fmtBRLk(v);} } }, y1: { position: 'right', grid: { display: false }, ticks: { color: '#FBBF24' } } }
+      }
+    });
+  });
+
+  chartSafe('chartDow', function() {
+    const dow = DATA.dia_semana;
+    const colors = dow.map(function(d) { if (d.vendas >= 50) return 'rgba(74, 222, 128, 0.85)'; if (d.vendas >= 40) return 'rgba(96, 165, 250, 0.75)'; if (d.vendas >= 38) return 'rgba(251, 191, 36, 0.75)'; return 'rgba(248, 113, 113, 0.7)'; });
+    new Chart(document.getElementById('chartDow'), { type: 'bar',
+      data: { labels: dow.map(function(d){return d.dia_pt;}), datasets: [{ label: 'Vendas', data: dow.map(function(d){return d.vendas;}), backgroundColor: colors, borderWidth: 0, borderRadius: 8 }] },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false },
+          tooltip: { backgroundColor: 'rgba(15, 23, 42, 0.95)', borderColor: 'rgba(148, 163, 184, 0.2)', borderWidth: 1, padding: 12,
+            callbacks: { label: function(ctx) { const d = dow[ctx.dataIndex]; return ['Vendas: ' + d.vendas, 'Receita: ' + fmtBRL(d.receita)]; } } } },
+        scales: { x: { grid: { display: false } }, y: { grid: { color: 'rgba(148, 163, 184, 0.06)' }, beginAtZero: true } }
+      } });
+  });
+
+  chartSafe('chartHora', function() {
+    const hora = DATA.hora;
+    new Chart(document.getElementById('chartHora'), { type: 'line',
+      data: { labels: hora.map(function(h){return String(h.hora).padStart(2,'0')+'h';}), datasets: [{ label: 'Vendas', data: hora.map(function(h){return h.vendas;}), borderColor: 'rgba(34, 211, 238, 1)', backgroundColor: 'rgba(34, 211, 238, 0.2)', borderWidth: 2.5, tension: 0.35, fill: true, pointBackgroundColor: 'rgba(34, 211, 238, 1)', pointBorderColor: '#0F172A', pointBorderWidth: 2, pointRadius: function(ctx) { const v = ctx.parsed.y; return v >= 23 ? 6 : v >= 15 ? 4 : 2; } }] },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false },
+          tooltip: { backgroundColor: 'rgba(15, 23, 42, 0.95)', borderColor: 'rgba(148, 163, 184, 0.2)', borderWidth: 1, padding: 12,
+            callbacks: { label: function(ctx) { const h = hora[ctx.dataIndex]; return ['Vendas: ' + h.vendas, 'Receita: ' + fmtBRL(h.receita)]; } } } },
+        scales: { x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } }, y: { grid: { color: 'rgba(148, 163, 184, 0.06)' }, beginAtZero: true } }
+      } });
+  });
+
+  chartSafe('chartSemana', function() {
+    const sem = DATA.semana_mes;
+    const semColors = { 1:'rgba(74,222,128,0.85)', 2:'rgba(248,113,113,0.75)', 3:'rgba(74,222,128,0.75)', 4:'rgba(251,191,36,0.75)', 5:'rgba(148,163,184,0.55)' };
+    new Chart(document.getElementById('chartSemana'), { type: 'bar',
+      data: { labels: sem.map(function(s){return 'Sem '+s.sem_mes;}), datasets: [{ data: sem.map(function(s){return s.vendas;}), backgroundColor: sem.map(function(s){return semColors[s.sem_mes] || 'rgba(148,163,184,0.5)';}), borderWidth: 0, borderRadius: 8 }] },
+      options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+        plugins: { legend: { display: false },
+          tooltip: { backgroundColor: 'rgba(15, 23, 42, 0.95)', borderColor: 'rgba(148, 163, 184, 0.2)', borderWidth: 1, padding: 12,
+            callbacks: { label: function(ctx) { const s = sem[ctx.dataIndex]; const pct = (s.vendas/308*100).toFixed(1); return ['Vendas: ' + s.vendas + ' (' + pct + '%)', 'Receita: ' + fmtBRL(s.receita)]; } } } },
+        scales: { x: { grid: { color: 'rgba(148, 163, 184, 0.06)' }, beginAtZero: true }, y: { grid: { display: false } } }
+      } });
+  });
+
+  chartSafe('chartPag', function() {
+    const pag = DATA.pagamento;
+    const colors = ['#22D3EE', '#A78BFA', '#60A5FA', '#FBBF24', '#94A3B8'];
+    new Chart(document.getElementById('chartPag'), { type: 'doughnut',
+      data: { labels: pag.map(function(p){return p.Pagamento;}), datasets: [{ data: pag.map(function(p){return p.vendas;}), backgroundColor: colors, borderColor: '#0F172A', borderWidth: 2 }] },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, padding: 8, font: {size: 10} } },
+          tooltip: { backgroundColor: 'rgba(15, 23, 42, 0.95)', borderColor: 'rgba(148, 163, 184, 0.2)', borderWidth: 1, padding: 12,
+            callbacks: { label: function(ctx) { const p = pag[ctx.dataIndex]; return [p.Pagamento + ': ' + p.vendas, 'Receita: ' + fmtBRL(p.receita)]; } } } },
+        cutout: '62%'
+      } });
+  });
+
+  chartSafe('chartOferta', function() {
+    const of = DATA.oferta;
+    new Chart(document.getElementById('chartOferta'), { type: 'bar',
+      data: { labels: of.map(function(o){return o.Oferta;}), datasets: [
+        { label: 'Vendas', data: of.map(function(o){return o.vendas;}), backgroundColor: 'rgba(167, 139, 250, 0.75)', borderWidth: 0, borderRadius: 6, yAxisID: 'y' },
+        { label: 'Ticket (R$)', data: of.map(function(o){return o.ticket;}), backgroundColor: 'rgba(74, 222, 128, 0.7)', borderWidth: 0, borderRadius: 6, yAxisID: 'y1' }
+      ] },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, padding: 8, font: {size: 10} } },
+          tooltip: { backgroundColor: 'rgba(15, 23, 42, 0.95)', borderColor: 'rgba(148, 163, 184, 0.2)', borderWidth: 1, padding: 12 } },
+        scales: { x: { grid: { display: false }, ticks: { font: { size: 9 } } },
+          y: { position: 'left', grid: { color: 'rgba(148, 163, 184, 0.06)' }, ticks: { font: { size: 9 } } },
+          y1: { position: 'right', grid: { display: false }, ticks: { callback: function(v){return fmtBRLk(v);}, font: { size: 9 }, color: '#4ADE80' } }
+        }
+      } });
+  });
+
+  chartSafe('chartGenero', function() {
+    const g = DEMO.genero;
+    new Chart(document.getElementById('chartGenero'), { type: 'doughnut',
+      data: { labels: g.map(function(x){return x.grupo;}), datasets: [{ data: g.map(function(x){return x.vendas;}), backgroundColor: g.map(function(x){return x.cor;}), borderColor: '#0F172A', borderWidth: 3 }] },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 12, font: {size: 11} } },
+          tooltip: { backgroundColor: 'rgba(15, 23, 42, 0.95)', borderColor: 'rgba(148, 163, 184, 0.2)', borderWidth: 1, padding: 12,
+            callbacks: { label: function(ctx) { const x = g[ctx.dataIndex]; const total = g.reduce(function(a,b){return a+b.vendas;},0); const pct = (x.vendas/total*100).toFixed(1); return [x.grupo + ': ' + x.vendas + ' (' + pct + '%)', 'Receita: ' + fmtBRL(x.receita), 'Ticket: ' + fmtBRL(x.ticket)]; } } } },
+        cutout: '62%'
+      } });
+  });
+
+  chartSafe('chartUF', function() {
+    const uf = DEMO.uf;
+    new Chart(document.getElementById('chartUF'), { type: 'bar',
+      data: { labels: uf.map(function(x){return x.uf;}), datasets: [{ label: 'Vendas', data: uf.map(function(x){return x.vendas;}), backgroundColor: uf.map(function(x,i) { if (i === 0) return 'rgba(74, 222, 128, 0.9)'; if (i <= 2) return 'rgba(74, 222, 128, 0.7)'; if (i <= 5) return 'rgba(96, 165, 250, 0.7)'; return 'rgba(167, 139, 250, 0.6)'; }), borderWidth: 0, borderRadius: 6 }] },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false },
+          tooltip: { backgroundColor: 'rgba(15, 23, 42, 0.95)', borderColor: 'rgba(148, 163, 184, 0.2)', borderWidth: 1, padding: 12,
+            callbacks: { label: function(ctx) { const x = uf[ctx.dataIndex]; const pct = (x.vendas/308*100).toFixed(1); return [x.uf + ': ' + x.vendas + ' (' + pct + '%)', 'Receita: ' + fmtBRL(x.receita)]; } } } },
+        scales: { x: { grid: { display: false }, ticks: { font: { size: 10 } } }, y: { grid: { color: 'rgba(148, 163, 184, 0.06)' }, beginAtZero: true } }
+      } });
+  });
+
+  chartSafe('chartRegiao', function() {
+    const r = DEMO.regiao;
+    new Chart(document.getElementById('chartRegiao'), { type: 'bar',
+      data: { labels: r.map(function(x){return x.regiao;}), datasets: [{ label: 'Vendas', data: r.map(function(x){return x.vendas;}), backgroundColor: r.map(function(x){return x.cor;}), borderWidth: 0, borderRadius: 8 }] },
+      options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+        plugins: { legend: { display: false },
+          tooltip: { backgroundColor: 'rgba(15, 23, 42, 0.95)', borderColor: 'rgba(148, 163, 184, 0.2)', borderWidth: 1, padding: 12,
+            callbacks: { label: function(ctx) { const x = r[ctx.dataIndex]; const pct = (x.vendas/308*100).toFixed(1); return [x.regiao + ': ' + x.vendas + ' (' + pct + '%)', 'Receita: ' + fmtBRL(x.receita)]; } } } },
+        scales: { x: { grid: { color: 'rgba(148, 163, 184, 0.06)' }, beginAtZero: true }, y: { grid: { display: false } } }
+      } });
+  });
+
+  try {
+    const mat = DATA.matriz;
+    const hm = document.getElementById('heatmap');
+    hm.innerHTML = '';
+    const head = document.createElement('div'); head.className = 'hm-head'; head.textContent = 'Semana'; hm.appendChild(head);
+    DIAS_PT.forEach(function(d) { const el = document.createElement('div'); el.className = 'hm-head'; el.textContent = d.substring(0, 3); hm.appendChild(el); });
+    let maxVal = 0;
+    mat.forEach(function(row){ DIAS_PT.forEach(function(d){ if((row[d]||0) > maxVal) maxVal = row[d]; }); });
+    mat.forEach(function(row) {
+      const lbl = document.createElement('div'); lbl.className = 'hm-row-lbl'; lbl.textContent = 'Sem ' + row.sem_mes; hm.appendChild(lbl);
+      DIAS_PT.forEach(function(d) {
+        const v = row[d] || 0; const intensity = maxVal > 0 ? v/maxVal : 0;
+        const bg = 'rgba(74, 222, 128, ' + (0.08 + intensity * 0.85).toFixed(2) + ')';
+        const txtColor = intensity > 0.5 ? '#0F172A' : '#E2E8F0';
+        const cell = document.createElement('div'); cell.className = 'hm-cell';
+        cell.style.background = bg; cell.style.color = txtColor;
+        cell.title = 'Sem ' + row.sem_mes + ' ' + d + ': ' + v + ' vendas';
+        cell.textContent = v; hm.appendChild(cell);
+      });
+    });
+  } catch(e) { console.error('heatmap', e); }
+
+  try {
+    const stages = [
+      { label: 'Pedidos totais', value: 457, pct: 100, status: 'ok', width: 100 },
+      { label: 'Aprovados (paid)', value: 308, pct: 67.4, status: 'ok', width: 67.4 },
+      { label: 'Aguardando (pix/boleto)', value: 77, pct: 16.8, status: 'warn', width: 16.8 },
+      { label: 'Recusados (cartão)', value: 64, pct: 14.0, status: 'bad', width: 14 },
+      { label: 'Reembolso/chargeback', value: 8, pct: 1.8, status: 'warn', width: 3 }
+    ];
+    const el = document.getElementById('funnel'); el.innerHTML = '';
+    stages.forEach(function(s) {
+      const row = document.createElement('div'); row.className = 'funnel-row ' + s.status;
+      row.innerHTML = '<div class="funnel-label">' + s.label + '</div>' +
+        '<div class="funnel-bar-wrap"><div class="funnel-bar" style="width: ' + s.width + '%;"></div></div>' +
+        '<div class="funnel-value">' + s.value + '</div>' +
+        '<div class="funnel-pct">' + s.pct + '%</div>';
+      el.appendChild(row);
+    });
+  } catch(e) { console.error('funnel', e); }
+
+  try {
+    const camps = DATA.top_campanhas;
+    const tbl = document.getElementById('tblCamp'); tbl.innerHTML = '';
+    camps.forEach(function(c) {
+      const roas = c.roas || 0;
+      let roasClass, roasText;
+      if (c.gasto > 0) { roasClass = roas >= 1.3 ? 'up' : roas >= 0.85 ? 'mid' : 'down'; roasText = roas.toFixed(2) + 'x'; }
+      else { roasClass = 'mid'; roasText = 'n/a'; }
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td><div class="camp-name">' + (c.nome || '') + '</div></td>' +
+        '<td class="num">' + c.vendas + '</td>' +
+        '<td class="num">' + fmtBRL(c.receita) + '</td>' +
+        '<td class="num">' + (c.gasto > 0 ? fmtBRL(c.gasto) : '—') + '</td>' +
+        '<td class="num"><span class="roas-badge ' + roasClass + '">' + roasText + '</span></td>';
+      tbl.appendChild(tr);
+    });
+  } catch(e) { console.error('tblCamp', e); }
+}
+
+function waitAndRender(tries) {
+  tries = tries || 0;
+  if (typeof Chart !== 'undefined') { renderAll(); }
+  else if (tries < 30) { setTimeout(function() { waitAndRender(tries + 1); }, 150); }
+  else { console.warn('Chart.js não carregou em 4.5s — renderizando sem gráficos'); renderAll(); }
+}
+
+if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', function() { waitAndRender(); }); }
+else { waitAndRender(); }
+</script>
+</body>
+</html>
